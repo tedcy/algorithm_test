@@ -163,11 +163,11 @@ public:
 #define p2i(node) int64_t(node - Node::NilPtr)
     Tree() = default;
     Tree(const Tree& other) {
-        copySubTree(root, other.root);
+        copySubTree(root_, other.root_);
     }
     Tree& operator=(Tree other) {
-        root = other.root;
-        other.root = Node::NilPtr;
+        root_ = other.root_;
+        other.root_ = Node::NilPtr;
         return *this;
     }
     Node* copySubTree(Node*& cur, const Node* other) {
@@ -187,11 +187,11 @@ public:
         return cur;
     }
     bool insert(const KeyT &key) {
-        auto parent = find<true>(root, key);
-        LDEBUG(LOGVT(p2i(parent)), LOGVT(parent->key));
-        if (parent->key == key) {
+        auto parent = findParent(root_, key);
+        if (!parent) {
             return false;
         }
+        LDEBUG(LOGVT(p2i(parent)), LOGVT(parent->key));
         auto newNode = new Node(key);
         newNode->isRed = true;
         if (parent != Node::NilPtr) {
@@ -206,8 +206,8 @@ public:
             debugPrint<true>();
             LDEBUG(LOGVT(p2i(parent)), LOGVT(parent->key), LOGVT((p2i(newNode))), LOGVT(newNode->key));
             if (parent == Node::NilPtr) {
-                root = newNode;
-                if (root->isRed) root->isRed = false;
+                root_ = newNode;
+                if (root_->isRed) root_->isRed = false;
                 return true;
             }
             if (!parent->isRed) {
@@ -237,13 +237,101 @@ public:
         }
         return true;
     }
+    bool erase(const KeyT& key) {
+        auto deleteNode = find(root_, key);
+        if (deleteNode == Node::NilPtr) {
+            return false;
+        }
+        auto deleteNextNode = findNext(deleteNode);
+        //update deleteNode
+        deleteNode->key = deleteNextNode->key;
+
+        deleteNode = deleteNextNode;
+        while(1) {
+            if (deleteNode == root_) {
+                break;
+            }
+            if (deleteNode->isRed) {
+                //delete 3-node, 4-node
+                break;
+            }
+            if (deleteNode == deleteNode->parent->left) {
+                //delete 2-node
+                //left-leaning/right-leaning change
+                if (deleteNode->parent->right->isRed) {
+                    leftRotate(deleteNode->parent->right);
+                    deleteNode->parent->parent->isRed = false;
+                    deleteNode->parent->isRed = true;
+                }
+                //try get brother child's red node
+                auto brother = deleteNode->parent->right;
+                if (brother->left->isRed) {
+                    rightRotate(brother->left);
+                    brother = deleteNode->parent->right;
+                    brother->isRed = false;
+                    brother->right->isRed = true;
+                }
+                if (brother->right->isRed) {
+                    leftRotate(brother);
+                    deleteNode->parent->parent->isRed = deleteNode->parent->isRed;
+                    deleteNode->parent->parent->right->isRed = false;
+                    deleteNode->parent->isRed = false;
+                    break;
+                }
+                //try get father's brother child's red node
+                brother->isRed = true;
+                deleteNode = deleteNode->parent;
+            }else {
+                //left-leaning/right-leaning change
+                if (deleteNode->parent->left->isRed) {
+                    rightRotate(deleteNode->parent->left);
+                    deleteNode->parent->parent->isRed = false;
+                    deleteNode->parent->isRed = true;
+                }
+                //try get brother child's red node
+                auto brother = deleteNode->parent->left;
+                if (brother->right->isRed) {
+                    leftRotate(brother->right);
+                    brother = deleteNode->parent->left;
+                    brother->isRed = false;
+                    brother->left->isRed = true;
+                }
+                if (brother->left->isRed) {
+                    rightRotate(brother);
+                    deleteNode->parent->parent->isRed = deleteNode->parent->isRed;
+                    deleteNode->parent->parent->left->isRed = false;
+                    deleteNode->parent->isRed = false;
+                    break;
+                }
+                //try get father's brother child's red node
+                brother->isRed = true;
+                deleteNode = deleteNode->parent;
+            }
+        }
+        //update deleteNextNode->right
+        if (deleteNextNode->right != Node::NilPtr) {
+            deleteNextNode->right->parent = deleteNextNode->parent;
+        }
+        //update deleteNextNode->parent
+        if (deleteNextNode->parent != Node::NilPtr) {
+            if (deleteNextNode == deleteNextNode->parent->left) {
+                deleteNextNode->parent->left = deleteNextNode->right;
+            }else {
+                deleteNextNode->parent->right = deleteNextNode->right;
+            }
+        }else {
+            root_ = Node::NilPtr;
+        }
+        delete deleteNextNode;
+        return true;
+    }
     template <bool isRoot>
     void debugPrint(Node* cur = nullptr) {
     #ifndef LOG_TAG
         return;
     #endif
         if (isRoot && !cur) {
-            cur = root;
+            cur = root_;
         }
         if (cur == Node::NilPtr) {
             return;
@@ -283,18 +371,20 @@ public:
     }
     int debugCheck() {
         vector<DebugNode> vs;
-        debugCheck(vs, 0, root);
+        debugCheck(vs, 0, root_);
         int lastDepth = 0;
         int lastValue = 0;
         bool ok = true;
         set<int> s;
         for (auto &v : vs) {
-            if (!v.isLeaf && s.count(v.key)) {
-                cout << LOGV("check dump failed") << endl;
-                ok = false;
-                break;
+            if (!v.isLeaf) {
+                if (s.count(v.key)) {
+                    cout << LOGV("check duplicate failed") << LOGV(v.key) << endl;
+                    ok = false;
+                    break;
+                }
+                s.insert(v.key);
             }
-            s.insert(v.key);
             if (!v.isColorOk) {
                 cout << LOGV("check color failed") << LOGV(v.key) << 
                     LOGV(v.isColorOk) << endl;
@@ -330,8 +420,8 @@ private:
         //update cur
         cur->left = curParent;
         cur->parent = curParent->parent;
-        if (root == curParent) {
-            root = cur;
+        if (root_ == curParent) {
+            root_ = cur;
         }
 
         //update cur->right
@@ -359,8 +449,8 @@ private:
         //update cur
         cur->right = curParent;
         cur->parent = curParent->parent;
-        if (root == curParent) {
-            root = cur;
+        if (root_ == curParent) {
+            root_ = cur;
         }
 
         //update cur->right
@@ -406,26 +496,53 @@ private:
         parent->left->isRed = true;
         return;
     }
-    template <bool isFindParent>
-        Node* find(Node* cur, const KeyT &key) {
-            while(cur != Node::NilPtr) {
-                if (key > cur->key) {
-                    if (isFindParent && cur->right == Node::NilPtr) {
-                        break;
-                    }
-                    cur = cur->right;
-                }else if (key < cur->key) {
-                    if (isFindParent && cur->left == Node::NilPtr) {
-                        break;
-                    }
-                    cur = cur->left;
-                }else {
-                    break;
-                }
-            }
+    Node* findNext(Node* cur) {
+        if (cur->right == Node::NilPtr) {
             return cur;
         }
-    Node* root = Node::NilPtr;
+        cur = cur->right;
+        while (1) {
+            if (cur->left == Node::NilPtr) {
+                break;
+            }
+            cur = cur->left;
+        }
+        return cur;
+    }
+    Node* find(Node* cur, const KeyT &key) {
+        while(cur != Node::NilPtr) {
+            if (key > cur->key) {
+                cur = cur->right;
+            }else if (key < cur->key) {
+                cur = cur->left;
+            }else {
+                break;
+            }
+        }
+        return cur;
+    }
+    Node* findParent(Node* cur, const KeyT &key) {
+        if (cur == Node::NilPtr) {
+            return cur;
+        }
+        while(1) {
+            if (key > cur->key) {
+                if (cur->right == Node::NilPtr) {
+                    break;
+                }
+                cur = cur->right;
+            }else if (key < cur->key) {
+                if (cur->left == Node::NilPtr) {
+                    break;
+                }
+                cur = cur->left;
+            }else {
+                return nullptr;
+            }
+        }
+        return cur;
+    }
+    Node* root_ = Node::NilPtr;
 };
 
 Tree::Node Tree::Node::Nil;
@@ -437,10 +554,20 @@ int nestCount = 0;
 void testBase() {
     Tree t;
 
-    vector<int> vs = {7,4,1,8,5,2,2,8,6,1,5,7,3,4,8,6,8,1,1,5};
+    vector<int> vs = {2,2,7,2,1,1,7,1,6,3,4,2,5,4,2,0,3,0,3,6};
     for (auto& v : vs) {
         cout << "insert" << LOGV(v) << endl;
         t.insert(v);
+        t.debugPrint<true>();
+        t.debugCheck();
+        cout << "----------" << endl;
+    }
+    return;
+
+    vs = {1,2,3,4};
+    for (auto& v : vs) {
+        cout << "erase" << LOGV(v) << endl;
+        t.erase(v);
         t.debugPrint<true>();
         t.debugCheck();
         cout << "----------" << endl;
@@ -452,71 +579,97 @@ void testBase() {
     //t1.debugCheck();
 }
 
+struct SeqGenerator {
+    explicit SeqGenerator(int count) {
+        for (int i = 0;i < count;i++) {
+            auto v = rand() % 8;
+            insertSeq_.push_back(v);
+        }
+        auto temp = insertSeq_;
+        for (int i = 0;i < count;i++) {
+            auto index = rand() % temp.size();
+            eraseSeq_.push_back(temp[index]);
+            temp[index] = temp[temp.size() - 1];
+            temp.pop_back();
+        }
+        assert(temp.empty());
+    }
+    SeqGenerator(const vector<int> &insertSeq,
+        const vector<int> &eraseSeq) : 
+        insertSeq_(insertSeq), eraseSeq_(eraseSeq) {
+    }
+    vector<int> insertSeq_;
+    vector<int> eraseSeq_;
+};
+
 void testRand() {
     for (int i = 0;i < allCount / nestCount ;i++) {
         Tree t;
-        Tree lastT;
-        vector<int> vs;
-        for (int i = 0;i < nestCount;i++) {
-            auto v = rand() % INT_MAX;
-            vs.push_back(v);
-        }
-        for (auto &v : vs) {
+        SeqGenerator seq(20);
+        bool failed = false;
+        for (auto &v : seq.insertSeq_) {
             t.insert(v);
             if (!t.debugCheck()) {
-                lastT.debugPrint<true>();
-                cout << "----------" << endl;
-                t.debugPrint<true>();
-                for (auto &v : vs) {
-                    cout << v << ",";
-                }
-                cout << endl;
-                return;
+                failed = true;
+                cout << "failed in insert" << endl;
+                break;
             }
-            lastT = t;
+        }
+        if (!failed) {
+            for (auto &v : seq.eraseSeq_) {
+                t.erase(v);
+                if (!t.debugCheck()) {
+                    failed = true;
+                    cout << "failed in erase" << endl;
+                    break;
+                }
+            }
+        }
+        if (failed) {
+            for (auto &v : seq.insertSeq_) {
+                cout << v << ",";
+            }
+            cout << endl;
+            for (auto &v : seq.eraseSeq_) {
+                cout << v << ",";
+            }
+            cout << endl;
+            return;
         }
     }
 }
 
 void testInsertPerformance() {
-    vector<int> vs;
-    for (int i = 0;i < allCount;i++) {
-        auto v = rand() % INT_MAX;
-        vs.push_back(v);
-    }
+    SeqGenerator seq(allCount);
     {
         Timer timer("Tree");
         Tree t;
-        for (auto &v : vs) {
+        for (auto &v : seq.insertSeq_) {
             t.insert(v);
         }
     }
     {
         Timer timer("set");
         set<int> s;
-        for (auto &v : vs) {
+        for (auto &v : seq.insertSeq_) {
             s.insert(v);
         }
     }
 }
 
 void testErasePerformance() {
-    vector<int> vs;
-    for (int i = 0;i < allCount;i++) {
-        auto v = rand() % INT_MAX;
-        vs.push_back(v);
-    }
+    SeqGenerator seq(allCount);
     {
         Timer timer("Tree");
         Tree t;
-        for (auto &v : vs) {
+        for (auto &v : seq.insertSeq_) {
             t.insert(v);
         }
     }
     {
         Timer timer("set");
         set<int> s;
-        for (auto &v : vs) {
+        for (auto &v : seq.insertSeq_) {
             s.insert(v);
         }
     }
@@ -529,5 +682,5 @@ int main() {
 
     //testBase();
     testRand();
-    //testPerformance();
+    //testInsertPerformance();
 }
