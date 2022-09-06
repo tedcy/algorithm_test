@@ -253,6 +253,7 @@ public:
             }
             if (deleteNode->isRed) {
                 //delete 3-node, 4-node
+                deleteNode->isRed = false;
                 break;
             }
             if (deleteNode == deleteNode->parent->left) {
@@ -303,6 +304,7 @@ public:
                     deleteNode->parent->isRed = false;
                     break;
                 }
+                LDEBUG(LOGVT(p2i(brother)), LOGVT(brother->key), LOGVT((p2i(deleteNode))), LOGVT(deleteNode->key));
                 //try get father's brother child's red node
                 brother->isRed = true;
                 deleteNode = deleteNode->parent;
@@ -338,7 +340,7 @@ public:
         }
         debugPrint<false>(cur->left);
         cout << LOGV(cur->key) << LOGV(cur->isRed) << 
-            LOGV(p2i(cur)) << LOGV(p2i(cur->left)) << LOGV(p2i(cur->right)) << LOGV(p2i(cur->parent)) <<
+            LOGV(p2i(cur)) << LOGV(p2i(cur->parent)) <<
             LOGV(cur->left->key) << LOGV(cur->right->key) << LOGV(cur->parent->key) << endl;
         debugPrint<false>(cur->right);
     }
@@ -551,38 +553,10 @@ Tree::Node* Tree::Node::NilPtr = &Tree::Node::Nil;
 int allCount = 0;
 int nestCount = 0;
 
-void testBase() {
-    Tree t;
-
-    vector<int> vs = {2,2,7,2,1,1,7,1,6,3,4,2,5,4,2,0,3,0,3,6};
-    for (auto& v : vs) {
-        cout << "insert" << LOGV(v) << endl;
-        t.insert(v);
-        t.debugPrint<true>();
-        t.debugCheck();
-        cout << "----------" << endl;
-    }
-    return;
-
-    vs = {1,2,3,4};
-    for (auto& v : vs) {
-        cout << "erase" << LOGV(v) << endl;
-        t.erase(v);
-        t.debugPrint<true>();
-        t.debugCheck();
-        cout << "----------" << endl;
-    }
-
-    //cout << "----------" << endl;
-    //auto t1 = t;
-    //t1.debugPrint<true>();
-    //t1.debugCheck();
-}
-
 struct SeqGenerator {
     explicit SeqGenerator(int count) {
         for (int i = 0;i < count;i++) {
-            auto v = rand() % 8;
+            auto v = rand() % INT_MAX;
             insertSeq_.push_back(v);
         }
         auto temp = insertSeq_;
@@ -602,10 +576,38 @@ struct SeqGenerator {
     vector<int> eraseSeq_;
 };
 
+void testBase() {
+    Tree t;
+
+    SeqGenerator seq({7,6,5,4,5,7,5,2,6,7,7,0,5,0,4,2,5,0,4,6}, 
+        {0,5,2,5,4,6,6,4,5,7,7,5,4,5,0,6,7,2,0,7});
+    for (auto& v : seq.insertSeq_) {
+        cout << "insert" << LOGV(v) << endl;
+        t.insert(v);
+        t.debugPrint<true>();
+        t.debugCheck();
+        cout << "----------" << endl;
+    }
+
+    for (auto& v : seq.eraseSeq_) {
+        cout << "erase" << LOGV(v) << endl;
+        t.erase(v);
+        t.debugPrint<true>();
+        t.debugCheck();
+        cout << "----------" << endl;
+    }
+
+    //cout << "----------" << endl;
+    //auto t1 = t;
+    //t1.debugPrint<true>();
+    //t1.debugCheck();
+}
+
+
 void testRand() {
     for (int i = 0;i < allCount / nestCount ;i++) {
         Tree t;
-        SeqGenerator seq(20);
+        SeqGenerator seq(nestCount);
         bool failed = false;
         for (auto &v : seq.insertSeq_) {
             t.insert(v);
@@ -642,14 +644,14 @@ void testRand() {
 void testInsertPerformance() {
     SeqGenerator seq(allCount);
     {
-        Timer timer("Tree");
+        Timer timer("Tree insert");
         Tree t;
         for (auto &v : seq.insertSeq_) {
             t.insert(v);
         }
     }
     {
-        Timer timer("set");
+        Timer timer("set insert");
         set<int> s;
         for (auto &v : seq.insertSeq_) {
             s.insert(v);
@@ -660,17 +662,23 @@ void testInsertPerformance() {
 void testErasePerformance() {
     SeqGenerator seq(allCount);
     {
-        Timer timer("Tree");
         Tree t;
         for (auto &v : seq.insertSeq_) {
             t.insert(v);
         }
+        Timer timer("Tree erase");
+        for (auto &v : seq.eraseSeq_) {
+            t.insert(v);
+        }
     }
     {
-        Timer timer("set");
         set<int> s;
         for (auto &v : seq.insertSeq_) {
             s.insert(v);
+        }
+        Timer timer("set erase");
+        for (auto &v : seq.eraseSeq_) {
+            s.erase(v);
         }
     }
 }
@@ -678,9 +686,10 @@ void testErasePerformance() {
 int main() {
     srand(time(0));
     allCount = 1000000;
-    nestCount = 100;
+    nestCount = 1000;
 
     //testBase();
-    testRand();
-    //testInsertPerformance();
+    //testRand();
+    testInsertPerformance();
+    testErasePerformance();
 }
