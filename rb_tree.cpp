@@ -162,6 +162,9 @@ public:
     };
 #define p2i(node) int64_t(node - Node::NilPtr)
     Tree() = default;
+    ~Tree() {
+        deleteSubTree(root_);
+    }
     Tree(const Tree& other) {
         copySubTree(root_, other.root_);
     }
@@ -415,6 +418,14 @@ public:
         return ok;
     }
 private:
+    void deleteSubTree(Node* node) {
+        if (node == Node::NilPtr) {
+            return;
+        }
+        deleteSubTree(node->left);
+        deleteSubTree(node->right);
+        delete node;
+    }
     void leftRotate(Node* cur) {
         auto curLeft = cur->left;
         auto curParent = cur->parent;
@@ -668,7 +679,7 @@ void testErasePerformance() {
         }
         Timer timer("Tree erase");
         for (auto &v : seq.eraseSeq_) {
-            t.insert(v);
+            t.erase(v);
         }
     }
     {
