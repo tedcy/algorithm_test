@@ -510,7 +510,7 @@ void testInsertPerformance() {
     SeqGenerator seq(allCount);
     {
         Timer timer("Tree insert");
-        MemoryUsedHolder h;
+        memory::UsedHolder h;
         Tree t;
         for (auto &v : seq.insertSeq_) {
             t.insert(v);
@@ -519,7 +519,7 @@ void testInsertPerformance() {
     }
     {
         Timer timer("set insert");
-        MemoryUsedHolder h;
+        memory::UsedHolder h;
         set<int> s;
         for (auto &v : seq.insertSeq_) {
             s.insert(v);
@@ -532,7 +532,7 @@ void testErasePerformance() {
     SeqGenerator seq(allCount);
     {
         Tree t;
-        MemoryUsedHolder h;
+        memory::UsedHolder h;
         for (auto &v : seq.insertSeq_) {
             t.insert(v);
         }
@@ -543,7 +543,7 @@ void testErasePerformance() {
     }
     {
         set<int> s;
-        MemoryUsedHolder h;
+        memory::UsedHolder h;
         for (auto &v : seq.insertSeq_) {
             s.insert(v);
         }
