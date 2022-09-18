@@ -31,7 +31,7 @@ public:
         if (other == Node::NilPtr) {
             return Node::NilPtr;
         }
-        cur = new Node(other->key);
+        cur = createNode(other->key);
         cur->isRed = other->isRed;
         cur->left = copySubTree(cur->left, other->left);
         if (cur->left) {
@@ -49,7 +49,7 @@ public:
             return false;
         }
         LDEBUG(LOGVT(p2i(parent)), LOGVT(parent->key));
-        auto newNode = new Node(key);
+        auto newNode = createNode(key);
         newNode->isRed = true;
         if (parent != Node::NilPtr) {
             if (key > parent->key) {
@@ -100,6 +100,9 @@ public:
             return false;
         }
         auto deleteNextNode = findNext(deleteNode);
+        if (deleteNextNode == deleteNode && deleteNode->left != Node::NilPtr) {
+            deleteNextNode = deleteNode->left;
+        }
         //update deleteNode
         deleteNode->key = deleteNextNode->key;
 
@@ -181,7 +184,7 @@ public:
         }else {
             root_ = Node::NilPtr;
         }
-        delete deleteNextNode;
+        removeNode(deleteNextNode);
         return true;
     }
     template <bool isRoot>
@@ -271,14 +274,30 @@ public:
         }
         return ok;
     }
+#ifdef CHECKMEMLEAK
+    set<Node*> debugNodes_;
+#endif
 private:
+    Node* createNode(const KeyT &key) {
+        auto node = new Node(key);
+#ifdef CHECKMEMLEAK
+        debugNodes_.insert(node);
+#endif
+        return node;
+    }
+    void removeNode(Node* node) {
+#ifdef CHECKMEMLEAK
+        debugNodes_.erase(node);
+#endif
+        delete node;
+    }
     void deleteSubTree(Node* node) {
         if (node == Node::NilPtr) {
             return;
         }
         deleteSubTree(node->left);
         deleteSubTree(node->right);
-        delete node;
+        removeNode(node);
     }
     void leftRotate(Node* cur) {
         auto curLeft = cur->left;
@@ -417,11 +436,12 @@ Tree::Node* Tree::Node::NilPtr = &Tree::Node::Nil;
 
 int allCount = 0;
 int nestCount = 0;
+int randMax = 0;
 
 struct SeqGenerator {
     explicit SeqGenerator(int count) {
         for (int i = 0;i < count;i++) {
-            auto v = rand() % INT_MAX;
+            auto v = rand() % randMax;
             insertSeq_.push_back(v);
         }
         auto temp = insertSeq_;
@@ -444,8 +464,8 @@ struct SeqGenerator {
 void testBase() {
     Tree t;
 
-    SeqGenerator seq({7,6,5,4,5,7,5,2,6,7,7,0,5,0,4,2,5,0,4,6}, 
-        {0,5,2,5,4,6,6,4,5,7,7,5,4,5,0,6,7,2,0,7});
+    SeqGenerator seq({2, 1}, 
+        {2, 1});
     for (auto& v : seq.insertSeq_) {
         cout << "insert" << LOGV(v) << endl;
         t.insert(v);
@@ -461,6 +481,12 @@ void testBase() {
         t.debugCheck();
         cout << "----------" << endl;
     }
+
+#ifdef CHECKMEMLEAK
+    if (!t.debugNodes_.empty()) {
+        cout << "failed in erase" << endl;
+    }
+#endif
 
     //cout << "----------" << endl;
     //auto t1 = t;
@@ -491,6 +517,12 @@ void testRand() {
                     break;
                 }
             }
+#ifdef CHECKMEMLEAK
+            if (!t.debugNodes_.empty()) {
+                failed = true;
+                cout << "failed in erase" << endl;
+            }
+#endif
         }
         if (failed) {
             for (auto &v : seq.insertSeq_) {
@@ -558,6 +590,7 @@ int main() {
     srand(time(0));
     allCount = 1000000;
     nestCount = 1000;
+    randMax = INT_MAX;
 
     //testBase();
     //testRand();
