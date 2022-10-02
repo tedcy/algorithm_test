@@ -1,4 +1,9 @@
+#pragma once
 #include "/root/env/snippets/cpp/cpp_test_common.h"
+
+#ifdef DebugCount
+static int64_t treeCount = 0;
+#endif
 
 class Tree{
     using KeyT = int;
@@ -94,8 +99,24 @@ public:
         }
         return true;
     }
+    Node* find(const KeyT& key) {
+        Node* cur = root_;
+        while(cur != Node::NilPtr) {
+#ifdef DebugCount
+            treeCount++;
+#endif
+            if (key > cur->key) {
+                cur = cur->right;
+            }else if (key < cur->key) {
+                cur = cur->left;
+            }else {
+                break;
+            }
+        }
+        return cur;
+    }
     bool erase(const KeyT& key) {
-        auto deleteNode = find(root_, key);
+        auto deleteNode = find(key);
         if (deleteNode == Node::NilPtr) {
             return false;
         }
@@ -395,18 +416,6 @@ private:
         }
         return cur;
     }
-    Node* find(Node* cur, const KeyT &key) {
-        while(cur != Node::NilPtr) {
-            if (key > cur->key) {
-                cur = cur->right;
-            }else if (key < cur->key) {
-                cur = cur->left;
-            }else {
-                break;
-            }
-        }
-        return cur;
-    }
     Node* findParent(Node* cur, const KeyT &key) {
         if (cur == Node::NilPtr) {
             return cur;
@@ -433,167 +442,3 @@ private:
 
 Tree::Node Tree::Node::Nil;
 Tree::Node* Tree::Node::NilPtr = &Tree::Node::Nil;
-
-int allCount = 0;
-int nestCount = 0;
-int randMax = 0;
-
-struct SeqGenerator {
-    explicit SeqGenerator(int count) {
-        for (int i = 0;i < count;i++) {
-            auto v = rand() % randMax;
-            insertSeq_.push_back(v);
-        }
-        auto temp = insertSeq_;
-        for (int i = 0;i < count;i++) {
-            auto index = rand() % temp.size();
-            eraseSeq_.push_back(temp[index]);
-            temp[index] = temp[temp.size() - 1];
-            temp.pop_back();
-        }
-        assert(temp.empty());
-    }
-    SeqGenerator(const vector<int> &insertSeq,
-        const vector<int> &eraseSeq) : 
-        insertSeq_(insertSeq), eraseSeq_(eraseSeq) {
-    }
-    vector<int> insertSeq_;
-    vector<int> eraseSeq_;
-};
-
-void testBase() {
-    Tree t;
-
-    SeqGenerator seq({2, 1}, 
-        {2, 1});
-    for (auto& v : seq.insertSeq_) {
-        cout << "insert" << LOGV(v) << endl;
-        t.insert(v);
-        t.debugPrint<true>();
-        t.debugCheck();
-        cout << "----------" << endl;
-    }
-
-    for (auto& v : seq.eraseSeq_) {
-        cout << "erase" << LOGV(v) << endl;
-        t.erase(v);
-        t.debugPrint<true>();
-        t.debugCheck();
-        cout << "----------" << endl;
-    }
-
-#ifdef CHECKMEMLEAK
-    if (!t.debugNodes_.empty()) {
-        cout << "failed in erase" << endl;
-    }
-#endif
-
-    //cout << "----------" << endl;
-    //auto t1 = t;
-    //t1.debugPrint<true>();
-    //t1.debugCheck();
-}
-
-
-void testRand() {
-    for (int i = 0;i < allCount / nestCount ;i++) {
-        Tree t;
-        SeqGenerator seq(nestCount);
-        bool failed = false;
-        for (auto &v : seq.insertSeq_) {
-            t.insert(v);
-            if (!t.debugCheck()) {
-                failed = true;
-                cout << "failed in insert" << endl;
-                break;
-            }
-        }
-        if (!failed) {
-            for (auto &v : seq.eraseSeq_) {
-                t.erase(v);
-                if (!t.debugCheck()) {
-                    failed = true;
-                    cout << "failed in erase" << endl;
-                    break;
-                }
-            }
-#ifdef CHECKMEMLEAK
-            if (!t.debugNodes_.empty()) {
-                failed = true;
-                cout << "failed in erase" << endl;
-            }
-#endif
-        }
-        if (failed) {
-            for (auto &v : seq.insertSeq_) {
-                cout << v << ",";
-            }
-            cout << endl;
-            for (auto &v : seq.eraseSeq_) {
-                cout << v << ",";
-            }
-            cout << endl;
-            return;
-        }
-    }
-}
-
-void testInsertPerformance() {
-    SeqGenerator seq(allCount);
-    {
-        Timer timer("Tree insert");
-        memory::UsedHolder h;
-        Tree t;
-        for (auto &v : seq.insertSeq_) {
-            t.insert(v);
-        }
-        h.print();
-    }
-    {
-        Timer timer("set insert");
-        memory::UsedHolder h;
-        set<int> s;
-        for (auto &v : seq.insertSeq_) {
-            s.insert(v);
-        }
-        h.print();
-    }
-}
-
-void testErasePerformance() {
-    SeqGenerator seq(allCount);
-    {
-        Tree t;
-        memory::UsedHolder h;
-        for (auto &v : seq.insertSeq_) {
-            t.insert(v);
-        }
-        Timer timer("Tree erase");
-        for (auto &v : seq.eraseSeq_) {
-            t.erase(v);
-        }
-    }
-    {
-        set<int> s;
-        memory::UsedHolder h;
-        for (auto &v : seq.insertSeq_) {
-            s.insert(v);
-        }
-        Timer timer("set erase");
-        for (auto &v : seq.eraseSeq_) {
-            s.erase(v);
-        }
-    }
-}
-
-int main() {
-    srand(time(0));
-    allCount = 1000000;
-    nestCount = 1000;
-    randMax = INT_MAX;
-
-    //testBase();
-    //testRand();
-    testInsertPerformance();
-    testErasePerformance();
-}
