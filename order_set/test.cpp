@@ -1,8 +1,9 @@
 #include "rb_tree.h"
 #include "t_zset_without_span.h"
 
-int allCount = 0;
-int nestCount = 0;
+int performanceElementSize = 0;
+int randTestElementSize = 0;
+int randTestRepeatCount = 0;
 int randMax = 0;
 
 struct SeqGenerator {
@@ -29,15 +30,17 @@ struct SeqGenerator {
 };
 
 void testBase() {
-    Tree t;
+    RankRBTree t;
 
-    SeqGenerator seq({2, 1}, 
-        {2, 1});
+    SeqGenerator seq({1,4,0,2,5,3,6}, 
+        {1,0,3,4,6,5,2});
     for (auto& v : seq.insertSeq_) {
         cout << "insert" << LOGV(v) << endl;
         t.insert(v);
         t.debugPrint<true>();
-        t.debugCheck();
+        if (!t.debugCheck()) {
+            break;
+        }
         cout << "----------" << endl;
     }
 
@@ -45,7 +48,9 @@ void testBase() {
         cout << "erase" << LOGV(v) << endl;
         t.erase(v);
         t.debugPrint<true>();
-        t.debugCheck();
+        if (!t.debugCheck()) {
+            break;
+        }
         cout << "----------" << endl;
     }
 
@@ -65,9 +70,9 @@ void testBase() {
 #include "t_zset_without_span.h"
 
 void testRand() {
-    for (int i = 0;i < allCount / nestCount ;i++) {
-        Tree t;
-        SeqGenerator seq(nestCount);
+    for (int i = 0;i < randTestRepeatCount ;i++) {
+        RankRBTree t;
+        SeqGenerator seq(randTestElementSize);
         bool failed = false;
         for (auto &v : seq.insertSeq_) {
             t.insert(v);
@@ -125,7 +130,7 @@ void testInsertPerformance(const SeqGenerator& seq) {
 }
 template <typename ...Types>
 void testInsertPerformance() {
-    SeqGenerator seq(allCount);
+    SeqGenerator seq(performanceElementSize);
     testInsertPerformance<Types...>(seq);
 }
 
@@ -148,7 +153,7 @@ void testFindPerformance(const SeqGenerator& seq) {
 }
 template <typename ...Types>
 void testFindPerformance() {
-    SeqGenerator seq(allCount);
+    SeqGenerator seq(performanceElementSize);
     //SeqGenerator seq({1,2,3,4}, {1,2,3,4});
     testFindPerformance<Types...>(seq);
 #ifdef DebugTreeCount
@@ -178,19 +183,20 @@ void testErasePerformance(const SeqGenerator& seq) {
 }
 template <typename ...Types>
 void testErasePerformance() {
-    SeqGenerator seq(allCount);
+    SeqGenerator seq(performanceElementSize);
     testErasePerformance<Types...>(seq);
 }
 
 int main() {
     srand(time(0));
-    allCount = 1000000;
-    nestCount = 1000;
+    performanceElementSize = 1000000;
+    randTestElementSize = 1000;
+    randTestRepeatCount = 1000;
     randMax = INT_MAX;
 
     //testBase();
     //testRand();
-    testInsertPerformance<Tree, ZSet, set<int>>();
-    testFindPerformance<Tree, ZSet, set<int>>();
-    testErasePerformance<Tree, ZSet, set<int>>();
+    testInsertPerformance<RBTree, RankRBTree, ZSet, set<int>, unordered_set<int>>();
+    testFindPerformance<RBTree, RankRBTree, ZSet, set<int>, unordered_set<int>>();
+    testErasePerformance<RBTree, RankRBTree, ZSet, set<int>, unordered_set<int>>();
 }

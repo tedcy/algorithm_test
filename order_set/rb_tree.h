@@ -1,17 +1,27 @@
 #pragma once
 #include "/root/env/snippets/cpp/cpp_test_common.h"
+#include <type_traits>
 
 #ifdef DebugCount
 static int64_t treeCount = 0;
 #endif
 
-class Tree{
+template <bool isRank>
+class RBTreeBase{
     using KeyT = int;
 public:
-    struct Node{
-        static Node Nil;
-        static Node* NilPtr;
-        Node() : parent(nullptr), left(nullptr), right(nullptr) {}
+    struct RankBaseNode {
+        int64_t size = 1;
+    };
+    struct EmptyBaseNode {};
+    struct Node : public std::conditional_t<isRank, RankBaseNode, EmptyBaseNode> {
+        static inline Node Nil;
+        static inline Node* NilPtr = &Node::Nil;
+        Node() : parent(nullptr), left(nullptr), right(nullptr) {
+            if constexpr(isRank) {
+                this->size = 0;
+            }
+        }
         Node(const KeyT &key) : key(key) {}
         Node* parent = NilPtr;
         Node* left = NilPtr;
@@ -19,15 +29,14 @@ public:
         KeyT key;
         bool isRed = false;
     };
-#define p2i(node) int64_t(node - Node::NilPtr)
-    Tree() = default;
-    ~Tree() {
+    RBTreeBase() = default;
+    ~RBTreeBase() {
         deleteSubTree(root_);
     }
-    Tree(const Tree& other) {
+    RBTreeBase(const RBTreeBase& other) {
         copySubTree(root_, other.root_);
     }
-    Tree& operator=(Tree other) {
+    RBTreeBase& operator=(RBTreeBase other) {
         root_ = other.root_;
         other.root_ = Node::NilPtr;
         return *this;
@@ -53,7 +62,7 @@ public:
         if (!parent) {
             return false;
         }
-        LDEBUG(LOGVT(p2i(parent)), LOGVT(parent->key));
+        LDEBUG(LOGVT(isNil(parent)), LOGVT(parent->key));
         auto newNode = createNode(key);
         newNode->isRed = true;
         if (parent != Node::NilPtr) {
@@ -66,7 +75,7 @@ public:
         }
         while(1) {
             debugPrint<true>();
-            LDEBUG(LOGVT(p2i(parent)), LOGVT(parent->key), LOGVT((p2i(newNode))), LOGVT(newNode->key));
+            LDEBUG(LOGVT(isNil(parent)), LOGVT(parent->key), LOGVT((isNil(newNode))), LOGVT(newNode->key));
             if (parent == Node::NilPtr) {
                 root_ = newNode;
                 if (root_->isRed) root_->isRed = false;
@@ -127,6 +136,16 @@ public:
         //update deleteNode
         deleteNode->key = deleteNextNode->key;
 
+        if constexpr(isRank) {
+            auto p = deleteNextNode->parent;
+            while(p != Node::NilPtr) {
+                p->size--;
+                LDEBUG(LOGVT(p->key), LOGVT(p->size));
+                p = p->parent;
+            }
+            deleteNextNode->size--;
+        }
+
         deleteNode = deleteNextNode;
         while(1) {
             if (deleteNode == root_) {
@@ -185,7 +204,7 @@ public:
                     deleteNode->parent->isRed = false;
                     break;
                 }
-                LDEBUG(LOGVT(p2i(brother)), LOGVT(brother->key), LOGVT((p2i(deleteNode))), LOGVT(deleteNode->key));
+                LDEBUG(LOGVT(isNil(brother)), LOGVT(brother->key), LOGVT((isNil(deleteNode))), LOGVT(deleteNode->key));
                 //try get father's brother child's red node
                 brother->isRed = true;
                 deleteNode = deleteNode->parent;
@@ -208,6 +227,23 @@ public:
         removeNode(deleteNextNode);
         return true;
     }
+    int64_t getRank(const KeyT& key) {
+        int64_t rank = -1;
+        if constexpr(isRank) {
+            auto cur = find(key);
+            if (cur == Node::NilPtr) {
+                return rank;
+            }
+            rank = 0;
+            do {
+                rank += (cur->left->size + 1); 
+                cur = findParentPrev(cur);
+            }while (cur != Node::NilPtr);
+            return rank;
+        }
+        static_assert(isRank);
+        return rank;
+    }
     template <bool isRoot>
     void debugPrint(Node* cur = nullptr) {
     #ifndef LOG_TAG
@@ -221,7 +257,7 @@ public:
         }
         debugPrint<false>(cur->left);
         cout << LOGV(cur->key) << LOGV(cur->isRed) << 
-            LOGV(p2i(cur)) << LOGV(p2i(cur->parent)) <<
+            LOGV(isNil(cur)) << LOGV(isNil(cur->parent)) <<
             LOGV(cur->left->key) << LOGV(cur->right->key) << LOGV(cur->parent->key) << endl;
         debugPrint<false>(cur->right);
     }
@@ -248,6 +284,11 @@ public:
         if (!cur->left && !cur->right) node.isLeaf = true;
         node.key = cur->key;
         node.isRed = cur->isRed;
+        if constexpr(isRank) {
+            if (!node.isLeaf) {
+                LDEBUG(LOGVT(node.key), LOGVT(cur->size));
+            }
+        }
         debugCheck(vs, depth, cur->left);
         vs.push_back(node);
         debugCheck(vs, depth, cur->right);
@@ -259,6 +300,7 @@ public:
         int lastValue = 0;
         bool ok = true;
         set<int> s;
+        int64_t rank = 1;
         for (auto &v : vs) {
             if (!v.isLeaf) {
                 if (s.count(v.key)) {
@@ -291,6 +333,18 @@ public:
                     break;
                 }
             }
+            if constexpr(isRank) {
+                if (!v.isLeaf) {
+                    if (rank != getRank(v.key)) {
+                        cout << LOGV("check rank failed") << LOGV(v.key) << 
+                            LOGV(rank) << LOGV(getRank(v.key)) << endl;
+                        ok = false;
+                        break;
+                    }
+                    LDEBUG(LOGVT(v.key), LOGVT(rank), LOGVT(getRank(v.key)));
+                    rank++;
+                }
+            }
             lastValue = v.key;
         }
         return ok;
@@ -299,6 +353,9 @@ public:
     set<Node*> debugNodes_;
 #endif
 private:
+    bool isNil(Node *cur) {
+        return cur == Node::NilPtr;
+    }
     Node* createNode(const KeyT &key) {
         auto node = new Node(key);
 #ifdef CHECKMEMLEAK
@@ -320,6 +377,7 @@ private:
         deleteSubTree(node->right);
         removeNode(node);
     }
+    //turn curParent to be cur Node left child
     void leftRotate(Node* cur) {
         auto curLeft = cur->left;
         auto curParent = cur->parent;
@@ -330,8 +388,12 @@ private:
         if (root_ == curParent) {
             root_ = cur;
         }
+        if constexpr(isRank) {
+            cur->size = curParent->size;
+            LDEBUG(LOGVT(cur->key), LOGVT(cur->size));
+        }
 
-        //update cur->right
+        //update cur->left
         if (curLeft != Node::NilPtr) {
             curLeft->parent = curParent;
         }
@@ -348,7 +410,12 @@ private:
         //update curParent
         curParent->parent = cur;
         curParent->right = curLeft;
+        if constexpr(isRank) {
+            curParent->size = curParent->left->size + curParent->right->size + 1;
+            LDEBUG(LOGVT(curParent->key), LOGVT(curParent->size));
+        }
     }
+    //turn curParent to be cur Node right child
     void rightRotate(Node* cur) {
         auto curRight = cur->right;
         auto curParent = cur->parent;
@@ -358,6 +425,10 @@ private:
         cur->parent = curParent->parent;
         if (root_ == curParent) {
             root_ = cur;
+        }
+        if constexpr(isRank) {
+            cur->size = curParent->size;
+            LDEBUG(LOGVT(cur->key), LOGVT(cur->size));
         }
 
         //update cur->right
@@ -377,6 +448,10 @@ private:
         //update curParent
         curParent->parent = cur;
         curParent->left = curRight;
+        if constexpr(isRank) {
+            curParent->size = curParent->left->size + curParent->right->size + 1;
+            LDEBUG(LOGVT(curParent->key), LOGVT(curParent->size));
+        }
     }
     void insert3Node(Node* newNode) {
         auto parent = newNode->parent;
@@ -416,17 +491,34 @@ private:
         }
         return cur;
     }
+    Node* findParentPrev(Node* cur) {
+        while(cur != Node::NilPtr) {
+            if (cur == cur->parent->right) {
+                return cur->parent;
+            }
+            cur = cur->parent;
+        }
+        return cur;
+    }
     Node* findParent(Node* cur, const KeyT &key) {
         if (cur == Node::NilPtr) {
             return cur;
         }
+        int index = 0;
+        Node* nodes[64];
         while(1) {
             if (key > cur->key) {
+                if constexpr (isRank) {
+                    nodes[index++] = cur;
+                }
                 if (cur->right == Node::NilPtr) {
                     break;
                 }
                 cur = cur->right;
             }else if (key < cur->key) {
+                if constexpr (isRank) {
+                    nodes[index++] = cur;
+                }
                 if (cur->left == Node::NilPtr) {
                     break;
                 }
@@ -435,10 +527,15 @@ private:
                 return nullptr;
             }
         }
+        if constexpr(isRank) {
+            for (int i = 0;i < index;i++) {
+                nodes[i]->size++;
+            }
+        }
         return cur;
     }
     Node* root_ = Node::NilPtr;
 };
 
-Tree::Node Tree::Node::Nil;
-Tree::Node* Tree::Node::NilPtr = &Tree::Node::Nil;
+using RBTree = RBTreeBase<false>;
+using RankRBTree = RBTreeBase<true>;

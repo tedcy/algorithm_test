@@ -165,15 +165,18 @@ inline zskiplistNode* zslGetRank(zskiplist *zsl, double score) {
         LDEBUG("next", LOGVT(score));
 #ifdef DebugCount
         while (++zsetCount && ++count && x->level[level].forward &&
-#endif
+#else
         while (x->level[level].forward &&
+#endif
             (x->level[level].forward->score < score ||
                 (x->level[level].forward->score == score))) {
             LDEBUG("forward", LOGVT(x->level[level].forward->score));
             x = x->level[level].forward;
         }
         if (x->score == score) {
+#ifdef DebugCount
             LDEBUG("finish", LOGVT(score), LOGVT(count));
+#endif
             return x;
         }
     }
