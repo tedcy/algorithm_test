@@ -9,6 +9,8 @@ static int64_t treeCount = 0;
 template <bool isRank>
 class RBTreeBase{
     using KeyT = int;
+    template <typename T>
+    friend class RBTreeDebuger;
 public:
     struct RankBaseNode {
         int64_t size = 1;
@@ -261,97 +263,7 @@ public:
             LOGV(cur->left->key) << LOGV(cur->right->key) << LOGV(cur->parent->key) << endl;
         debugPrint<false>(cur->right);
     }
-    struct DebugNode {
-        int depth = 0;
-        bool isRed = false;
-        bool isLeaf = false;
-        bool isColorOk = true;
-        KeyT key;
-    };
-    void debugCheck(vector<DebugNode>& vs, int depth, Node* cur) {
-        if (!cur) {
-            return;
-        }
-        DebugNode node;
-        if (cur->isRed) {
-            if (cur->left->isRed || cur->right->isRed) {
-                node.isColorOk = false;
-            }
-        } else{
-            depth = depth + 1;
-            node.depth = depth;
-        }
-        if (!cur->left && !cur->right) node.isLeaf = true;
-        node.key = cur->key;
-        node.isRed = cur->isRed;
-        if constexpr(isRank) {
-            if (!node.isLeaf) {
-                LDEBUG(LOGVT(node.key), LOGVT(cur->size));
-            }
-        }
-        debugCheck(vs, depth, cur->left);
-        vs.push_back(node);
-        debugCheck(vs, depth, cur->right);
-    }
-    int debugCheck() {
-        vector<DebugNode> vs;
-        debugCheck(vs, 0, root_);
-        int lastDepth = 0;
-        int lastValue = 0;
-        bool ok = true;
-        set<int> s;
-        int64_t rank = 1;
-        for (auto &v : vs) {
-            if (!v.isLeaf) {
-                if (s.count(v.key)) {
-                    cout << LOGV("check duplicate failed") << LOGV(v.key) << endl;
-                    ok = false;
-                    break;
-                }
-                s.insert(v.key);
-            }
-            if (!v.isColorOk) {
-                cout << LOGV("check color failed") << LOGV(v.key) << 
-                    LOGV(v.isColorOk) << endl;
-                ok = false;
-                break;
-            }
-            if (v.isLeaf) {
-                if (lastDepth != 0 && v.depth != lastDepth) {
-                    cout << LOGV("check depth failed") << LOGV(v.key) << 
-                        LOGV(v.depth) << LOGV(lastDepth) << endl;
-                    ok = false;
-                    break;
-                }
-                lastDepth = v.depth;
-            }
-            if (lastValue != 0) {
-                if (!v.isLeaf && v.key < lastValue) {
-                    cout << LOGV("check value failed") << LOGV(v.key) << 
-                        LOGV(v.depth) << LOGV(lastDepth) << endl;
-                    ok = false;
-                    break;
-                }
-            }
-            if constexpr(isRank) {
-                if (!v.isLeaf) {
-                    if (rank != getRank(v.key)) {
-                        cout << LOGV("check rank failed") << LOGV(v.key) << 
-                            LOGV(rank) << LOGV(getRank(v.key)) << endl;
-                        ok = false;
-                        break;
-                    }
-                    LDEBUG(LOGVT(v.key), LOGVT(rank), LOGVT(getRank(v.key)));
-                    rank++;
-                }
-            }
-            lastValue = v.key;
-        }
-        return ok;
-    }
-#ifdef CHECKMEMLEAK
-    set<Node*> debugNodes_;
-#endif
+    
 private:
     bool isNil(Node *cur) {
         return cur == Node::NilPtr;
@@ -539,3 +451,109 @@ private:
 
 using RBTree = RBTreeBase<false>;
 using RankRBTree = RBTreeBase<true>;
+
+template <typename RBTreeT>
+class RBTreeDebuger {
+    using KeyT = typename RBTreeT::KeyT;
+    using Node = typename RBTreeT::Node;
+public:
+    RBTreeT t_;
+    struct DebugNode {
+        int depth = 0;
+        bool isRed = false;
+        bool isLeaf = false;
+        bool isColorOk = true;
+        KeyT key;
+    };
+    void debugCheck(vector<DebugNode>& vs, int depth, Node* cur) {
+        if (!cur) {
+            return;
+        }
+        DebugNode node;
+        if (cur->isRed) {
+            if (cur->left->isRed || cur->right->isRed) {
+                node.isColorOk = false;
+            }
+        } else{
+            depth = depth + 1;
+            node.depth = depth;
+        }
+        if (!cur->left && !cur->right) node.isLeaf = true;
+        node.key = cur->key;
+        node.isRed = cur->isRed;
+        if constexpr(std::is_same_v<RBTreeT,RankRBTree>) {
+            if (!node.isLeaf) {
+                LDEBUG(LOGVT(node.key), LOGVT(cur->size));
+            }
+        }
+        debugCheck(vs, depth, cur->left);
+        vs.push_back(node);
+        debugCheck(vs, depth, cur->right);
+    }
+    int debugCheck(const set<int>& expectResult) {
+        vector<DebugNode> vs;
+        debugCheck(vs, 0, t_.root_);
+        int lastDepth = 0;
+        int lastValue = 0;
+        bool ok = true;
+        set<int> s;
+        int64_t rank = 1;
+        for (auto &v : vs) {
+            if (!v.isLeaf) {
+                if (s.count(v.key)) {
+                    cout << LOGV("check duplicate failed") << LOGV(v.key) << endl;
+                    ok = false;
+                    break;
+                }
+                s.insert(v.key);
+            }
+            if (!v.isColorOk) {
+                cout << LOGV("check color failed") << LOGV(v.key) << 
+                    LOGV(v.isColorOk) << endl;
+                ok = false;
+                break;
+            }
+            if (v.isLeaf) {
+                if (lastDepth != 0 && v.depth != lastDepth) {
+                    cout << LOGV("check depth failed") << LOGV(v.key) << 
+                        LOGV(v.depth) << LOGV(lastDepth) << endl;
+                    ok = false;
+                    break;
+                }
+                lastDepth = v.depth;
+            }
+            if (lastValue != 0) {
+                if (!v.isLeaf && v.key < lastValue) {
+                    cout << LOGV("check value failed") << LOGV(v.key) << 
+                        LOGV(v.depth) << LOGV(lastDepth) << endl;
+                    ok = false;
+                    break;
+                }
+            }
+            if constexpr(std::is_same_v<RBTreeT,RankRBTree>) {
+                if (!v.isLeaf) {
+                    if (rank != t_.getRank(v.key)) {
+                        cout << LOGV("check rank failed") << LOGV(v.key) << 
+                            LOGV(rank) << LOGV(t_.getRank(v.key)) << endl;
+                        ok = false;
+                        break;
+                    }
+                    LDEBUG(LOGVT(v.key), LOGVT(rank), LOGVT(getRank(v.key)));
+                    rank++;
+                }
+            }
+            lastValue = v.key;
+        }
+        if (s != expectResult) {
+            cout << LOGV("check expectResult failed") << 
+                LOGV(s.size()) <<
+                LOGV(expectResult.size()) << endl;
+            ok = false;
+            return ok;
+        }
+        return ok;
+    }
+#ifdef CHECKMEMLEAK
+    set<Node*> debugNodes_;
+#endif
+};
