@@ -8,15 +8,24 @@ int randTestElementSize = 0;
 int randTestRepeatCount = 0;
 int randMax = 0;
 
-struct SeqGenerator {
+using testType = int;
+
+template <typename T>
+struct SeqGeneratorBase {
     static inline bool isUnique = false;
     static void setUnique() {
         isUnique = true;
     }
-    explicit SeqGenerator(uint count) {
-        set<int> uniqueSet;
+    explicit SeqGeneratorBase(uint count) {
+        set<T> uniqueSet;
         while(insertSeq_.size() < count) {
-            auto v = rand() % randMax;
+            T v;
+            int temp = rand() % randMax;
+            if constexpr(is_same_v<T, int>) {
+                v = temp;
+            }else {
+                v = to_string(temp);
+            }
             if (isUnique) {
                 if (uniqueSet.count(v) != 0) {
                     continue;
@@ -28,26 +37,38 @@ struct SeqGenerator {
         eraseSeq_ = insertSeq_;
         random_shuffle(eraseSeq_.begin(), eraseSeq_.end());
     }
-    SeqGenerator(const vector<int> &insertSeq,
-        const vector<int> &eraseSeq) : 
-        insertSeq_(insertSeq), eraseSeq_(eraseSeq) {
+    SeqGeneratorBase(const vector<int> &insertSeq,
+        const vector<int> &eraseSeq) {
+        if constexpr(is_same_v<T, int>) {
+            insertSeq_ = insertSeq;
+            eraseSeq_ = eraseSeq;
+        }else {
+            for (auto &v : insertSeq) {
+                insertSeq_.insert(to_string(v));
+            }
+            for (auto &v : eraseSeq) {
+                eraseSeq_.insert(to_string(v));
+            }
+        }
     }
-    vector<int> insertSeq_;
-    vector<int> eraseSeq_;
+    vector<T> insertSeq_;
+    vector<T> eraseSeq_;
 };
+
+using SeqGenerator = SeqGeneratorBase<testType>;
 
 template <typename T, typename ...Types>
 void testInOrderBase() {
     T t;
-    set<int> expectResult;
+    set<testType> expectResult;
 
     SeqGenerator seq({1,4,0,2,5,3,6}, 
         {1,0,3,4,6,5,2});
     for (auto& v : seq.insertSeq_) {
         cout << "insert" << LOGV(v) << endl;
-        t.insert(v);
+        t.t_.insert(v);
         expectResult.insert(v);
-        t.template debugPrint<true>();
+        t.t_.template debugPrint<true>();
         if (!t.debugCheck(expectResult)) {
             break;
         }
@@ -56,9 +77,9 @@ void testInOrderBase() {
 
     for (auto& v : seq.eraseSeq_) {
         cout << "erase" << LOGV(v) << endl;
-        t.erase(v);
+        t.t_.erase(v);
         expectResult.erase(v);
-        t.template debugPrint<true>();
+        t.t_.template debugPrint<true>();
         if (!t.debugCheck(expectResult)) {
             break;
         }
@@ -86,7 +107,7 @@ void testInOrder() {
 
 template <typename T, typename ...Types>
 void testRandBase() {
-    set<int> expectResult;
+    set<testType> expectResult;
     for (int i = 0;i < randTestRepeatCount ;i++) {
         T t;
         SeqGenerator seq(randTestElementSize);
@@ -271,11 +292,10 @@ int main() {
     randTestRepeatCount = 1000;
     randMax = INT_MAX;
 
-    //testInOrder<RBTree, RankRBTree>();
+    //testInOrder<RBTreeDebuger<RBTree<int>>, RBTreeDebuger<RBTree<int>>>();
     //testRand<RBTreeDebuger<RBTree>, RBTreeDebuger<RankRBTree>, SkipListDebuger>();
-    testInsertPerformance<SkipList>();
-    //testInsertPerformance<RBTree, RankRBTree, ZSet, SkipList, set<int>, unordered_set<int>>();
-    //testFindPerformance<RBTree, RankRBTree, ZSet, SkipList, set<int>, unordered_set<int>>();
-    //testErasePerformance<RBTree, RankRBTree, ZSet, SkipList, set<int>, unordered_set<int>>();
-    //testRankPerformance<RankRBTree, ZSet>();
+    testInsertPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
+    testFindPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
+    testErasePerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
+    testRankPerformance<RankRBTree<testType>, ZSet<testType>>();
 }

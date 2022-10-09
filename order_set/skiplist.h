@@ -1,11 +1,17 @@
 #pragma once
 
 #include "/root/env/snippets/cpp/cpp_test_common.h"
+#include <type_traits>
 
+#ifdef DebugCount
+static int64_t zsetCount = 0;
+#endif
+
+template <typename KeyT>
 class SkipList {
-    using KeyT = int;
     static constexpr double _P = 0.25;
     static constexpr int MAX_LEVEL = 32;
+    template <typename>
     friend class SkipListDebuger;
 public:
     struct Node {
@@ -20,7 +26,10 @@ public:
         return node;
     }
     Node* newNode(int level) {
-        auto node = static_cast<Node*>(operator new(sizeof(Node) + level * sizeof(Node::Level)));
+        auto node = static_cast<Node*>(operator new(sizeof(Node) + level * sizeof(typename Node::Level)));
+        if constexpr (!std::is_pod_v<KeyT>) {
+            return new (node) Node;
+        }
         return node;
     }
     SkipList() {
@@ -128,10 +137,11 @@ private:
     int level_ = 1;
 };
 
+template <typename KeyT>
 class SkipListDebuger {
 public:
-    SkipList t_;
-    using Node = SkipList::Node;
+    SkipList<KeyT> t_;
+    using Node = typename SkipList<KeyT>::Node;
     bool debugCheck(set<int> &expectResult) {
         set<int> s;
         Node* cur = t_.head_->level[0].next;

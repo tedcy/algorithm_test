@@ -6,11 +6,12 @@
 static int64_t treeCount = 0;
 #endif
 
-template <bool isRank>
+template <typename KeyT, bool isRank>
 class RBTreeBase{
-    using KeyT = int;
     template <typename T>
     friend class RBTreeDebuger;
+    using _KeyT = KeyT;
+    static constexpr auto _isRank = isRank;
 public:
     struct RankBaseNode {
         int64_t size = 1;
@@ -449,13 +450,17 @@ private:
     Node* root_ = Node::NilPtr;
 };
 
-using RBTree = RBTreeBase<false>;
-using RankRBTree = RBTreeBase<true>;
+template <typename KeyT>
+using RBTree = RBTreeBase<KeyT, false>;
+
+template <typename KeyT>
+using RankRBTree = RBTreeBase<KeyT, true>;
 
 template <typename RBTreeT>
 class RBTreeDebuger {
-    using KeyT = typename RBTreeT::KeyT;
+    using KeyT = typename RBTreeT::_KeyT;
     using Node = typename RBTreeT::Node;
+    static constexpr auto isRank = RBTreeT::_isRank;
 public:
     RBTreeT t_;
     struct DebugNode {
@@ -481,7 +486,7 @@ public:
         if (!cur->left && !cur->right) node.isLeaf = true;
         node.key = cur->key;
         node.isRed = cur->isRed;
-        if constexpr(std::is_same_v<RBTreeT,RankRBTree>) {
+        if constexpr(isRank) {
             if (!node.isLeaf) {
                 LDEBUG(LOGVT(node.key), LOGVT(cur->size));
             }
@@ -530,7 +535,7 @@ public:
                     break;
                 }
             }
-            if constexpr(std::is_same_v<RBTreeT,RankRBTree>) {
+            if constexpr(isRank) {
                 if (!v.isLeaf) {
                     if (rank != t_.getRank(v.key)) {
                         cout << LOGV("check rank failed") << LOGV(v.key) << 

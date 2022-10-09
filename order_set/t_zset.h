@@ -2,40 +2,53 @@
 
 #include "stdlib.h"
 #include "assert.h"
+#include <type_traits>
 
 #define ZSKIPLIST_MAXLEVEL 32 /* Should be enough for 2^32 elements */
 #define ZSKIPLIST_P 0.25      /* Skiplist P = 1/4 */
 
 /* ZSETs use a specialized version of Skiplists */
-typedef struct zskiplistNode {
-    int score;
+template <typename T>
+struct zskiplistNode {
+    T score;
     struct zskiplistNode *backward;
     struct zskiplistLevel {
         struct zskiplistNode *forward;
         unsigned int span;
     } level[];
-} zskiplistNode;
+};
 
-typedef struct zskiplist {
-    struct zskiplistNode *header, *tail;
+template <typename T>
+struct zskiplist {
+    struct zskiplistNode<T> *header, *tail;
     unsigned long length;
     int level;
-} zskiplist;
+};
 
-inline zskiplistNode *zslCreateNode(int level, int score) {
-    zskiplistNode *zn = (zskiplistNode*)malloc(sizeof(*zn)+level*sizeof(zskiplistNode::zskiplistLevel));
+template <typename T>
+inline zskiplistNode<T> *zslCreateNode(int level) {
+    zskiplistNode<T> *zn = (zskiplistNode<T>*)malloc(sizeof(*zn)+level*sizeof(typename zskiplistNode<T>::zskiplistLevel));
+    if constexpr (!std::is_pod_v<T>) {
+        return new (zn) zskiplistNode<T>;
+    }
+    return zn;
+}
+template <typename T>
+inline zskiplistNode<T> *zslCreateNode(int level, T score) {
+    zskiplistNode<T> *zn = zslCreateNode<T>(level);
     zn->score = score;
     return zn;
 }
 
-inline zskiplist *zslCreate(void) {
+template <typename T>
+inline zskiplist<T> *zslCreate(void) {
     int j;
-    zskiplist *zsl;
+    zskiplist<T> *zsl;
 
-    zsl = (zskiplist*)malloc(sizeof(*zsl));
+    zsl = (zskiplist<T>*)malloc(sizeof(*zsl));
     zsl->level = 1;
     zsl->length = 0;
-    zsl->header = zslCreateNode(ZSKIPLIST_MAXLEVEL,0);
+    zsl->header = zslCreateNode<T>(ZSKIPLIST_MAXLEVEL);
     for (j = 0; j < ZSKIPLIST_MAXLEVEL; j++) {
         zsl->header->level[j].forward = NULL;
         zsl->header->level[j].span = 0;
@@ -45,12 +58,14 @@ inline zskiplist *zslCreate(void) {
     return zsl;
 }
 
-inline void zslFreeNode(zskiplistNode *node) {
+template <typename T>
+inline void zslFreeNode(zskiplistNode<T> *node) {
     free(node);
 }
 
-inline void zslFree(zskiplist *zsl) {
-    zskiplistNode *node = zsl->header->level[0].forward, *next;
+template <typename T>
+inline void zslFree(zskiplist<T> *zsl) {
+    zskiplistNode<T> *node = zsl->header->level[0].forward, *next;
 
     free(zsl->header);
     while(node) {
@@ -72,8 +87,9 @@ inline  int zslRandomLevel(void) {
     return (level<ZSKIPLIST_MAXLEVEL) ? level : ZSKIPLIST_MAXLEVEL;
 }
 
-inline zskiplistNode *zslInsert(zskiplist *zsl, int score) {
-    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
+template <typename T>
+inline zskiplistNode<T> *zslInsert(zskiplist<T> *zsl, T score) {
+    zskiplistNode<T> *update[ZSKIPLIST_MAXLEVEL], *x;
     unsigned int rank[ZSKIPLIST_MAXLEVEL];
     int i, level;
 
@@ -126,7 +142,8 @@ inline zskiplistNode *zslInsert(zskiplist *zsl, int score) {
 }
 
 /* Internal function used by zslDelete, zslDeleteByScore and zslDeleteByRank */
-inline void zslDeleteNode(zskiplist *zsl, zskiplistNode *x, zskiplistNode **update) {
+template <typename T>
+inline void zslDeleteNode(zskiplist<T> *zsl, zskiplistNode<T> *x, zskiplistNode<T> **update) {
     int i;
     for (i = 0; i < zsl->level; i++) {
         if (update[i]->level[i].forward == x) {
@@ -147,8 +164,9 @@ inline void zslDeleteNode(zskiplist *zsl, zskiplistNode *x, zskiplistNode **upda
 }
 
 /* Delete an element with matching score/object from the skiplist. */
-inline int zslDelete(zskiplist *zsl, int score) {
-    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
+template <typename T>
+inline int zslDelete(zskiplist<T> *zsl, T score) {
+    zskiplistNode<T> *update[ZSKIPLIST_MAXLEVEL], *x;
     int i;
 
     x = zsl->header;
@@ -173,8 +191,9 @@ inline int zslDelete(zskiplist *zsl, int score) {
  * Returns 0 when the element cannot be found, rank otherwise.
  * Note that the rank is 1-based due to the span of zsl->header to the
  * first element. */
-inline unsigned long zslGetRank(zskiplist *zsl, int score) {
-    zskiplistNode *x;
+template <typename T>
+inline unsigned long zslGetRank(zskiplist<T> *zsl, T score) {
+    zskiplistNode<T> *x;
     unsigned long rank = 0;
     int i;
 
@@ -194,8 +213,9 @@ inline unsigned long zslGetRank(zskiplist *zsl, int score) {
     return 0;
 }
 
-inline zskiplistNode* zslfind(zskiplist *zsl, int score) {
-    zskiplistNode *x;
+template <typename T>
+inline zskiplistNode<T>* zslfind(zskiplist<T> *zsl, T score) {
+    zskiplistNode<T> *x;
     int i;
 
     x = zsl->header;
@@ -213,27 +233,28 @@ inline zskiplistNode* zslfind(zskiplist *zsl, int score) {
     return nullptr;
 }
 
+template <typename KeyT>
 class ZSet {
 public:
-    ZSet() :list_(zslCreate()){
+    ZSet() :list_(zslCreate<KeyT>()){
     }
     ~ZSet() {
         if (list_) {
             zslFree(list_);
         }
     }
-    void insert(int score) {
+    void insert(KeyT score) {
         zslInsert(list_, score);
     }
-    void erase(int score) {
+    void erase(KeyT score) {
         zslDelete(list_, score);
     }
-    auto find(int score) {
+    auto find(KeyT score) {
         return zslfind(list_, score);
     }
-    auto getRank(int score) {
+    auto getRank(KeyT score) {
         return zslGetRank(list_, score);
     }
 private:
-    zskiplist *list_ = nullptr;
+    zskiplist<KeyT> *list_ = nullptr;
 };
