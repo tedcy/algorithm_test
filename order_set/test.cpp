@@ -2,6 +2,7 @@
 //#include "t_zset_without_span.h"
 #include "t_zset.h"
 #include "skiplist.h"
+#include <type_traits>
 
 int performanceElementSize = 0;
 int randTestElementSize = 0;
@@ -315,6 +316,16 @@ void testGetByRankPerformance() {
     cout << __FUNCTION__ << " end" << endl;
 }
 
+template <typename T>
+struct hasNext {
+    template <typename U>
+    static void check(decltype(declval<U>().next(nullptr))*);
+    template <typename U>
+    static int check(...);
+
+    enum {value = std::is_void_v<decltype(check<T>(nullptr))>};
+};
+
 template <typename T, typename ...Types>
 void testRangePerformanceNest() {
     {
@@ -326,7 +337,12 @@ void testRangePerformanceNest() {
         }
         {
             Timer timer(getType<T>() + " range");
-            for (auto cur = t.begin(); cur != t.end(); cur = t.next(cur)) {
+            if constexpr(hasNext<T>::value) {
+                for (auto cur = t.begin(); cur != t.end(); cur = t.next(cur)) {
+                }
+            }else {
+                for (auto cur = t.begin(); cur != t.end(); cur++) {
+                }
             }
         }
     }
@@ -389,7 +405,7 @@ int main() {
     randTestElementSize = 1000;
     randTestRepeatCount = 1000;
     randMax = INT_MAX;
-
+    
     //testInOrder<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RBTree<testType>>>();
     //testRand<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RankRBTree<testType>>, SkipListDebuger<testType>>();
     testInsertPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
@@ -397,6 +413,6 @@ int main() {
     testErasePerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
     testGetRankPerformance<RankRBTree<testType>, ZSet<testType>>();
     testGetByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
-    testRangePerformance<RankRBTree<testType>, ZSet<testType>>();
+    testRangePerformance<RankRBTree<testType>, ZSet<testType>, set<testType>>();
     testRangeByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
 }
