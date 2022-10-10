@@ -233,6 +233,27 @@ inline zskiplistNode<T>* zslfind(zskiplist<T> *zsl, T score) {
     return nullptr;
 }
 
+/* Finds an element by its rank. The rank argument needs to be 1-based. */
+template <typename T>
+zskiplistNode<T>* zslGetElementByRank(zskiplist<T> *zsl, unsigned long rank) {
+    zskiplistNode<T> *x;
+    unsigned long traversed = 0;
+    int i;
+
+    x = zsl->header;
+    for (i = zsl->level-1; i >= 0; i--) {
+        while (x->level[i].forward && (traversed + x->level[i].span) <= rank)
+        {
+            traversed += x->level[i].span;
+            x = x->level[i].forward;
+        }
+        if (traversed == rank) {
+            return x;
+        }
+    }
+    return NULL;
+}
+
 template <typename KeyT>
 class ZSet {
 public:
@@ -254,6 +275,21 @@ public:
     }
     auto getRank(KeyT score) {
         return zslGetRank(list_, score);
+    }
+    auto getByRank(int rank) {
+        return zslGetElementByRank(list_, rank);
+    }
+    auto next(zskiplistNode<KeyT> *node) {
+        return node->level[0].forward;
+    }
+    auto begin() {
+        return list_->header;
+    }
+    auto end() {
+        return nullptr;
+    }
+    auto size() {
+        return list_->length;
     }
 private:
     zskiplist<KeyT> *list_ = nullptr;

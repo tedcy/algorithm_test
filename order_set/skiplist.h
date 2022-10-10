@@ -142,8 +142,8 @@ class SkipListDebuger {
 public:
     SkipList<KeyT> t_;
     using Node = typename SkipList<KeyT>::Node;
-    bool debugCheck(set<int> &expectResult) {
-        set<int> s;
+    bool debugCheck(set<KeyT> &expectResult) {
+        set<KeyT> s;
         Node* cur = t_.head_->level[0].next;
         while(cur != nullptr) {
             s.insert(cur->key);

@@ -44,10 +44,10 @@ struct SeqGeneratorBase {
             eraseSeq_ = eraseSeq;
         }else {
             for (auto &v : insertSeq) {
-                insertSeq_.insert(to_string(v));
+                insertSeq_.push_back(to_string(v));
             }
             for (auto &v : eraseSeq) {
-                eraseSeq_.insert(to_string(v));
+                eraseSeq_.push_back(to_string(v));
             }
         }
     }
@@ -257,7 +257,7 @@ void testErasePerformance() {
 }
 
 template <typename T, typename ...Types>
-void testRankPerformanceNest() {
+void testGetRankPerformanceNest() {
     {
         SeqGenerator seq(performanceElementSize);
         T t;
@@ -273,13 +273,111 @@ void testRankPerformanceNest() {
         }
     }
     if constexpr (sizeof...(Types) != 0) {
-        testRankPerformanceNest<Types...>();
+        testGetRankPerformanceNest<Types...>();
     }
 }
 template <typename ...Types>
-void testRankPerformance() {
+void testGetRankPerformance() {
     cout << __FUNCTION__ << " start" << endl;
-    testRankPerformanceNest<Types...>();
+    testGetRankPerformanceNest<Types...>();
+    cout << __FUNCTION__ << " end" << endl;
+}
+
+template <typename T, typename ...Types>
+void testGetByRankPerformanceNest() {
+    {
+        SeqGenerator seq(performanceElementSize);
+        T t;
+        profile::MemoryHolder h;
+        for (auto &v : seq.insertSeq_) {
+            t.insert(v);
+        }
+        vector<int> rankSeq;
+        for (uint i = 1;i <= seq.insertSeq_.size();i++) {
+            rankSeq.push_back(i);
+        }
+        random_shuffle(rankSeq.begin(), rankSeq.end());
+        {
+            Timer timer(getType<T>() + " getByRank");
+            for (auto &v : rankSeq) {
+                t.getByRank(v);
+            }
+        }
+    }
+    if constexpr (sizeof...(Types) != 0) {
+        testGetByRankPerformanceNest<Types...>();
+    }
+}
+template <typename ...Types>
+void testGetByRankPerformance() {
+    cout << __FUNCTION__ << " start" << endl;
+    testGetByRankPerformanceNest<Types...>();
+    cout << __FUNCTION__ << " end" << endl;
+}
+
+template <typename T, typename ...Types>
+void testRangePerformanceNest() {
+    {
+        SeqGenerator seq(performanceElementSize);
+        T t;
+        profile::MemoryHolder h;
+        for (auto &v : seq.insertSeq_) {
+            t.insert(v);
+        }
+        {
+            Timer timer(getType<T>() + " range");
+            for (auto cur = t.begin(); cur != t.end(); cur = t.next(cur)) {
+            }
+        }
+    }
+    if constexpr (sizeof...(Types) != 0) {
+        testRangePerformanceNest<Types...>();
+    }
+}
+template <typename ...Types>
+void testRangePerformance() {
+    cout << __FUNCTION__ << " start" << endl;
+    testRangePerformanceNest<Types...>();
+    cout << __FUNCTION__ << " end" << endl;
+}
+
+template <typename T, typename ...Types>
+void testRangeByRankPerformanceNest() {
+    {
+        SeqGenerator seq(performanceElementSize);
+        T t;
+        profile::MemoryHolder h;
+        for (auto &v : seq.insertSeq_) {
+            t.insert(v);
+        }
+        vector<pair<int, int>> rankPairSeq;
+        for (uint i = 0;i < 1000;i++) {
+            int j = rand() % t.size();
+            int k = rand() % t.size();
+            if (j < k) {
+                rankPairSeq.push_back({j, k});
+            }else {
+                rankPairSeq.push_back({k, j});
+            }
+        }
+        {
+            Timer timer(getType<T>() + " rangeByRank");
+            for (auto &p : rankPairSeq) {
+                auto start = t.getByRank(p.first);
+                auto end = t.getByRank(p.second);
+                for (auto cur = start; cur != end; cur = t.next(cur)) {
+                }
+            }
+        }
+    }
+    if constexpr (sizeof...(Types) != 0) {
+        testRangeByRankPerformanceNest<Types...>();
+    }
+}
+template <typename ...Types>
+void testRangeByRankPerformance() {
+    cout << __FUNCTION__ << " start" << endl;
+    testRangeByRankPerformanceNest<Types...>();
     cout << __FUNCTION__ << " end" << endl;
 }
 
@@ -292,10 +390,13 @@ int main() {
     randTestRepeatCount = 1000;
     randMax = INT_MAX;
 
-    //testInOrder<RBTreeDebuger<RBTree<int>>, RBTreeDebuger<RBTree<int>>>();
-    //testRand<RBTreeDebuger<RBTree>, RBTreeDebuger<RankRBTree>, SkipListDebuger>();
+    //testInOrder<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RBTree<testType>>>();
+    //testRand<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RankRBTree<testType>>, SkipListDebuger<testType>>();
     testInsertPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
     testFindPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
     testErasePerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
-    testRankPerformance<RankRBTree<testType>, ZSet<testType>>();
+    testGetRankPerformance<RankRBTree<testType>, ZSet<testType>>();
+    testGetByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
+    testRangePerformance<RankRBTree<testType>, ZSet<testType>>();
+    testRangeByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
 }

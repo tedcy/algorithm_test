@@ -109,6 +109,7 @@ public:
             insert3Node(newNode); 
             break;
         }
+        length_++;
         return true;
     }
     Node* find(const KeyT& key) {
@@ -132,7 +133,7 @@ public:
         if (deleteNode == Node::NilPtr) {
             return false;
         }
-        auto deleteNextNode = findNext(deleteNode);
+        auto deleteNextNode = findChildNext(deleteNode);
         if (deleteNextNode == deleteNode && deleteNode->left != Node::NilPtr) {
             deleteNextNode = deleteNode->left;
         }
@@ -228,7 +229,19 @@ public:
             root_ = Node::NilPtr;
         }
         removeNode(deleteNextNode);
+        length_--;
         return true;
+    }
+    Node* getByRank(int rank) {
+        if (rank <= 0 || rank > length_) {
+            return nullptr;
+        }
+        Node* cur;
+        if constexpr(isRank) {
+            return getByRank(root_, rank);
+        }
+        static_assert(isRank);
+        return cur;
     }
     int64_t getRank(const KeyT& key) {
         int64_t rank = -1;
@@ -247,6 +260,41 @@ public:
         static_assert(isRank);
         return rank;
     }
+    Node* begin() {
+        auto cur = root_;
+        if (cur == Node::NilPtr) {
+            return cur;
+        }
+        while(cur->left != Node::NilPtr) {
+            cur = cur->left;
+        }
+        return cur;
+    }
+    Node* end() {
+        return Node::NilPtr;
+    }
+    Node* next(Node* cur) {
+        if (cur->right == Node::NilPtr) {
+            while(cur != Node::NilPtr) {
+                if (cur == cur->parent->left) {
+                    return cur->parent;
+                }
+                cur = cur->parent;
+            }
+            return cur;
+        }
+        cur = cur->right;
+        while (1) {
+            if (cur->left == Node::NilPtr) {
+                break;
+            }
+            cur = cur->left;
+        }
+        return cur;
+    }
+    uint64_t size() {
+        return length_;
+    }
     template <bool isRoot>
     void debugPrint(Node* cur = nullptr) {
     #ifndef LOG_TAG
@@ -264,8 +312,19 @@ public:
             LOGV(cur->left->key) << LOGV(cur->right->key) << LOGV(cur->parent->key) << endl;
         debugPrint<false>(cur->right);
     }
-    
 private:
+    Node* getByRank(Node* cur, int rank) {
+        if constexpr (isRank) {
+            int curRank = cur->left->size + 1;
+            if (curRank == rank) {
+                return cur;
+            }
+            if (rank < curRank) {
+                return getByRank(cur->left, rank);
+            }
+            return getByRank(cur->right, rank - curRank);
+        }
+    }
     bool isNil(Node *cur) {
         return cur == Node::NilPtr;
     }
@@ -391,7 +450,7 @@ private:
         parent->left->isRed = true;
         return;
     }
-    Node* findNext(Node* cur) {
+    Node* findChildNext(Node* cur) {
         if (cur->right == Node::NilPtr) {
             return cur;
         }
@@ -448,6 +507,7 @@ private:
         return cur;
     }
     Node* root_ = Node::NilPtr;
+    uint64_t length_ = 0;
 };
 
 template <typename KeyT>
@@ -470,6 +530,9 @@ public:
         bool isColorOk = true;
         KeyT key;
     };
+    void insert(const KeyT &key) {
+        t_.insert(key);
+    }
     void debugCheck(vector<DebugNode>& vs, int depth, Node* cur) {
         if (!cur) {
             return;
@@ -495,41 +558,43 @@ public:
         vs.push_back(node);
         debugCheck(vs, depth, cur->right);
     }
-    int debugCheck(const set<int>& expectResult) {
+    int debugCheck(const set<KeyT>& expectResult) {
         vector<DebugNode> vs;
         debugCheck(vs, 0, t_.root_);
         int lastDepth = 0;
-        int lastValue = 0;
+        KeyT lastValue = KeyT{};
         bool ok = true;
-        set<int> s;
+        set<KeyT> s; //check duplicate
+        vector<KeyT> checkNext; //check next() is correct
         int64_t rank = 1;
         for (auto &v : vs) {
             if (!v.isLeaf) {
                 if (s.count(v.key)) {
-                    cout << LOGV("check duplicate failed") << LOGV(v.key) << endl;
+                    cout << "check duplicate failed" << LOGV(v.key) << endl;
                     ok = false;
                     break;
                 }
                 s.insert(v.key);
+                checkNext.push_back(v.key);
             }
             if (!v.isColorOk) {
-                cout << LOGV("check color failed") << LOGV(v.key) << 
+                cout << "check color failed" << LOGV(v.key) << 
                     LOGV(v.isColorOk) << endl;
                 ok = false;
                 break;
             }
             if (v.isLeaf) {
                 if (lastDepth != 0 && v.depth != lastDepth) {
-                    cout << LOGV("check depth failed") << LOGV(v.key) << 
+                    cout << "check depth failed" << LOGV(v.key) << 
                         LOGV(v.depth) << LOGV(lastDepth) << endl;
                     ok = false;
                     break;
                 }
                 lastDepth = v.depth;
             }
-            if (lastValue != 0) {
+            if (lastValue != KeyT{}) {
                 if (!v.isLeaf && v.key < lastValue) {
-                    cout << LOGV("check value failed") << LOGV(v.key) << 
+                    cout << "check value failed" << LOGV(v.key) << 
                         LOGV(v.depth) << LOGV(lastDepth) << endl;
                     ok = false;
                     break;
@@ -538,8 +603,14 @@ public:
             if constexpr(isRank) {
                 if (!v.isLeaf) {
                     if (rank != t_.getRank(v.key)) {
-                        cout << LOGV("check rank failed") << LOGV(v.key) << 
+                        cout << "check getRank failed" << LOGV(v.key) << 
                             LOGV(rank) << LOGV(t_.getRank(v.key)) << endl;
+                        ok = false;
+                        break;
+                    }
+                    if (v.key != t_.getByRank(rank)->key) {
+                        cout << "check getByRank failed" << LOGV(v.key) << 
+                            LOGV(rank) << LOGV(t_.getByRank(rank)->key) << endl;
                         ok = false;
                         break;
                     }
@@ -550,11 +621,20 @@ public:
             lastValue = v.key;
         }
         if (s != expectResult) {
-            cout << LOGV("check expectResult failed") << 
+            cout << "check expectResult failed" << 
                 LOGV(s.size()) <<
                 LOGV(expectResult.size()) << endl;
             ok = false;
             return ok;
+        }
+        int index = 0;
+        for(auto node = t_.begin();node != t_.end();node = t_.next(node), index++) {
+            if (node->key != checkNext[index]) {
+                cout << "check next failed" << LOGV(node->key) << 
+                    LOGV(index) << LOGV(checkNext[index]) << endl;
+                ok = false;
+                break;
+            }
         }
         return ok;
     }
