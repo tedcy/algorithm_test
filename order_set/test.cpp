@@ -325,6 +325,15 @@ struct hasNext {
 
     enum {value = std::is_void_v<decltype(check<T>(nullptr))>};
 };
+template <typename T>
+struct hasPushBack {
+    template <typename U>
+    static void check(decltype(declval<U>().push_back(declval<typename U::allocator_type::value_type>()))*);
+    template <typename U>
+    static int check(...);
+
+    enum {value = std::is_void_v<decltype(check<T>(nullptr))>};
+};
 
 template <typename T, typename ...Types>
 void testRangePerformanceNest() {
@@ -333,7 +342,11 @@ void testRangePerformanceNest() {
         T t;
         profile::MemoryHolder h;
         for (auto &v : seq.insertSeq_) {
-            t.insert(v);
+            if constexpr (hasPushBack<T>::value) {
+                t.push_back(v);
+            }else {
+                t.insert(v);
+            }
         }
         {
             Timer timer(getType<T>() + " range");
@@ -398,7 +411,7 @@ void testRangeByRankPerformance() {
 }
 
 int main() {
-    Timer::setW(120);
+    Timer::setW(60);
     SeqGenerator::setUnique();
     srand(time(0));
     performanceElementSize = 1000000;
@@ -408,11 +421,11 @@ int main() {
     
     //testInOrder<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RBTree<testType>>>();
     //testRand<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RankRBTree<testType>>, SkipListDebuger<testType>>();
-    testInsertPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
-    testFindPerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
-    testErasePerformance<RBTree<testType>, RankRBTree<testType>, ZSet<testType>, SkipList<testType>, set<testType>, unordered_set<testType>>();
+    testInsertPerformance<RBTree<testType>, RankRBTree<testType>, SkipList<testType>, ZSet<testType>, set<testType>, unordered_set<testType>>();
+    testFindPerformance<RBTree<testType>, RankRBTree<testType>, SkipList<testType>, ZSet<testType>, set<testType>, unordered_set<testType>>();
+    testErasePerformance<RBTree<testType>, RankRBTree<testType>, SkipList<testType>, ZSet<testType>, set<testType>, unordered_set<testType>>();
     testGetRankPerformance<RankRBTree<testType>, ZSet<testType>>();
     testGetByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
-    testRangePerformance<RankRBTree<testType>, ZSet<testType>, set<testType>>();
+    testRangePerformance<RankRBTree<testType>, ZSet<testType>, set<testType>, list<testType>>();
     testRangeByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
 }
