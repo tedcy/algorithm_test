@@ -3,6 +3,7 @@
 #include "t_zset.h"
 #include "skiplist.h"
 #include <type_traits>
+#include <unistd.h>
 
 int performanceElementSize = 0;
 int randTestElementSize = 0;
@@ -338,7 +339,7 @@ struct hasPushBack {
 template <typename T, typename ...Types>
 void testRangePerformanceNest() {
     {
-        SeqGenerator seq(performanceElementSize);
+        SeqGenerator seq(performanceElementSize * 10);
         T t;
         profile::MemoryHolder h;
         for (auto &v : seq.insertSeq_) {
@@ -354,7 +355,7 @@ void testRangePerformanceNest() {
                 for (auto cur = t.begin(); cur != t.end(); cur = t.next(cur)) {
                 }
             }else {
-                for (auto cur = t.begin(); cur != t.end(); cur++) {
+                for (auto cur = t.begin(); cur != t.end(); ++cur) {
                 }
             }
         }
@@ -426,6 +427,6 @@ int main() {
     testErasePerformance<RBTree<testType>, RankRBTree<testType>, SkipList<testType>, ZSet<testType>, set<testType>, unordered_set<testType>>();
     testGetRankPerformance<RankRBTree<testType>, ZSet<testType>>();
     testGetByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
-    testRangePerformance<RankRBTree<testType>, ZSet<testType>, set<testType>, list<testType>>();
+    testRangePerformance<RankRBTree<testType>, ZSet<testType>, set<testType>, list<testType>, vector<testType>>();
     testRangeByRankPerformance<RankRBTree<testType>, ZSet<testType>>();
 }
