@@ -120,10 +120,9 @@ public:
 #ifdef DebugCount
         int count = 0;
 #endif
-        LDEBUG(LOGVT(key));
         auto cur = head_;
         for (int level = level_ - 1;level >= 0;level--) {
-            LDEBUG("next level", LOGVT(key));
+            LDEBUG(LOGVT(level), LOGVT(key));
             while(1) {
                 if (auto next = cur->level[level].next; 
 #ifdef DebugCount
@@ -134,6 +133,7 @@ public:
                     LDEBUG("next element", LOGVT(next->key));
                     cur = next;
                 }else {
+                    LDEBUG("next level", LOGVT(key));
                     break;
                 }
             }
