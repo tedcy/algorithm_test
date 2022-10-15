@@ -4,12 +4,12 @@
 #include <type_traits>
 
 #ifdef DebugCount
-static int64_t zsetCount = 0;
+static int64_t gSkipListCount = 0;
 #endif
 
 template <typename KeyT>
 class SkipList {
-    static constexpr double _P = 0.25;
+    static constexpr double _P = 0.5;
     static constexpr int MAX_LEVEL = 32;
     template <typename>
     friend class SkipListDebuger;
@@ -65,6 +65,14 @@ public:
             update[level] = cur;
         }
         auto level = getRandomLevel();
+#ifdef DebugCount
+        switch (key) {
+            case 1: level = 2;break;
+            case 2: level = 1;break;
+            case 3: level = 1;break;
+            case 4: level = 3;break;
+        }
+#endif
         if (level > level_) {
             for (auto i = level_; i < level; i++) {
                 update[i] = head_;
@@ -109,16 +117,30 @@ public:
         return false;
     }
     Node* find(const KeyT& key) {
+#ifdef DebugCount
+        int count = 0;
+#endif
+        LDEBUG(LOGVT(key));
         auto cur = head_;
         for (int level = level_ - 1;level >= 0;level--) {
+            LDEBUG("next level", LOGVT(key));
             while(1) {
-                if (auto next = cur->level[level].next; next && next->key <= key) {
+                if (auto next = cur->level[level].next; 
+#ifdef DebugCount
+                        ++gSkipListCount && ++count && next && next->key <= key) {
+#else
+                        next && next->key <= key) {
+#endif
+                    LDEBUG("next element", LOGVT(next->key));
                     cur = next;
                 }else {
                     break;
                 }
             }
             if (cur && cur->key == key) {
+#ifdef DebugCount
+                LDEBUG("finish", LOGVT(key), LOGVT(count));
+#endif
                 return cur;
             }
         }
@@ -154,4 +176,11 @@ public:
         }
         return false;
     }
+    void debugPrint() {
+    }
+#ifdef DebugCount
+    int64_t getDebugCount() {
+        return gSkipListCount;
+    }
+#endif
 };

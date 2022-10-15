@@ -3,7 +3,7 @@
 #include <type_traits>
 
 #ifdef DebugCount
-static int64_t treeCount = 0;
+static int64_t gTreeCount = 0;
 #endif
 
 template <typename KeyT, bool isRank>
@@ -116,7 +116,7 @@ public:
         Node* cur = root_;
         while(cur != Node::NilPtr) {
 #ifdef DebugCount
-            treeCount++;
+            gTreeCount++;
 #endif
             if (key > cur->key) {
                 cur = cur->right;
@@ -533,6 +533,9 @@ public:
     void insert(const KeyT &key) {
         t_.insert(key);
     }
+    void debugPrint() {
+        t_.template debugPrint<true>();
+    }
     void debugCheck(vector<DebugNode>& vs, int depth, Node* cur) {
         if (!cur) {
             return;
@@ -638,6 +641,11 @@ public:
         }
         return ok;
     }
+#ifdef DebugCount
+    int64_t getDebugCount() {
+        return gTreeCount;
+    }
+#endif
 #ifdef CHECKMEMLEAK
     set<Node*> debugNodes_;
 #endif

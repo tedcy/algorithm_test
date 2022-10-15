@@ -64,13 +64,18 @@ void testInOrderBase() {
     T t;
     set<testType> expectResult;
 
-    SeqGenerator seq({1,4,0,2,5,3,6}, 
-        {1,0,3,4,6,5,2});
+#ifdef DebugCount
+    SeqGenerator seq({1,2,3,4}, 
+        {1,2,3,4});
+#else
+    SeqGenerator seq({1,2,3,4}, 
+        {1,2,3,4});
+#endif
     for (auto& v : seq.insertSeq_) {
         cout << "insert" << LOGV(v) << endl;
         t.t_.insert(v);
         expectResult.insert(v);
-        t.t_.template debugPrint<true>();
+        t.debugPrint();
         if (!t.debugCheck(expectResult)) {
             break;
         }
@@ -78,10 +83,23 @@ void testInOrderBase() {
     }
 
     for (auto& v : seq.eraseSeq_) {
+        cout << "find" << LOGV(v) << endl;
+        auto node = t.t_.find(v);
+        if (node->key != v) {
+            break;
+        }
+        cout << "----------" << endl;
+    }
+#ifdef DebugCount
+    cout << LOGV(seq.eraseSeq_.size()) << 
+        LOGV(double(t.getDebugCount()) / seq.eraseSeq_.size()) << endl;
+#endif
+
+    for (auto& v : seq.eraseSeq_) {
         cout << "erase" << LOGV(v) << endl;
         t.t_.erase(v);
         expectResult.erase(v);
-        t.t_.template debugPrint<true>();
+        t.debugPrint();
         if (!t.debugCheck(expectResult)) {
             break;
         }
@@ -93,6 +111,7 @@ void testInOrderBase() {
         cout << "failed in erase" << endl;
     }
 #endif
+
     if constexpr (sizeof...(Types) != 0) {
         testInOrderBase<Types...>();
     }
@@ -223,11 +242,6 @@ template <typename ...Types>
 void testFindPerformance() {
     cout << __FUNCTION__ << " start" << endl;
     testFindPerformanceNest<Types...>();
-#ifdef DebugTreeCount
-    cout << LOGV(seq.eraseSeq_.size()) << 
-        LOGV(treeCount / seq.eraseSeq_.size()) << 
-        LOGV(zsetCount / seq.eraseSeq_.size()) << endl;
-#endif
     cout << __FUNCTION__ << " end" << endl;
 }
 
@@ -419,6 +433,11 @@ int main() {
     randTestElementSize = 1000;
     randTestRepeatCount = 1000;
     randMax = INT_MAX;
+    
+#ifdef DebugCount
+    testInOrder<SkipListDebuger<testType>, RBTreeDebuger<RBTree<testType>>>();
+    return 0;
+#endif
     
     //testInOrder<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RBTree<testType>>>();
     //testRand<RBTreeDebuger<RBTree<testType>>, RBTreeDebuger<RankRBTree<testType>>, SkipListDebuger<testType>>();
