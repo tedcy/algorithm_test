@@ -52,7 +52,7 @@ struct SeqGeneratorBase {
 
 using SeqGenerator = SeqGeneratorBase<testType>;
 
-template <typename K>
+template <typename K, bool isPopHeadUseRemove = true>
 class RemovableLRU {
     struct Data {
         template<typename T>
@@ -62,9 +62,23 @@ class RemovableLRU {
     };
     list<Data> datas_;
     unordered_map<K, typename list<Data>::iterator> m_;
+    uint limit_ = 0;
+    K popHead() {
+        Data data = move(datas_.front());
+        if (isPopHeadUseRemove) {
+            remove(data.k);
+            return data.k;
+        }
+        datas_.pop_front();
+        m_.erase(data.mIter);
+        return data.k;
+    }
 public:
+    void setLimit(uint limit) {
+        limit_ = limit;
+    }
     template <typename T>
-    void pushBack(T && k) {
+    pair<bool, K> pushBack(T && k) {
         datas_.emplace_back(std::forward<T>(k));
         typename list<Data>::iterator lIter = datas_.end(); 
         lIter--;
@@ -73,6 +87,10 @@ public:
             auto mIter = ret.first;
             mIter->second->mIter = mIter;
         }
+        if (limit_ != 0 && datas_.size() > limit_) {
+            return {true, popHead()};
+        }
+        return {false, {}};
     }
     template <typename T>
     void remove(T && k) {
@@ -91,13 +109,30 @@ public:
     }
 };
 
-template <typename K>
+template <typename K, bool isPopHeadUseRemove = true>
 class SimpleRemovableLRU {
     vector<K> vs_;
+    uint limit_ = 0;
+    K popHead() {
+        K k = vs_.front();
+        if (isPopHeadUseRemove) {
+            remove(k);
+            return k;
+        }
+        vs_.erase(vs_.begin());
+        return k;
+    }
 public:
+    void setLimit(uint limit) {
+        limit_ = limit;
+    }
     template <typename T>
-    void pushBack(T && k) {
+    pair<bool, K> pushBack(T && k) {
         vs_.emplace_back(move(k));
+        if (limit_ != 0 && vs_.size() > limit_) {
+            return {true, popHead()};
+        }
+        return {false, {}};
     }
     void remove(const K &k) {
         auto iter = find(vs_.begin(), vs_.end(), k);
@@ -113,13 +148,20 @@ public:
 template <typename T, typename ...Types>
 void testPushPerformanceNest() {
     {
-        SeqGenerator seq(performanceElementSize);
+        SeqGenerator seq(performanceElementSize * 2);
         T t;
+        t.setLimit(performanceElementSize);
+        auto iter = seq.pushSeq_.begin();
         {
-            //防止T析构也被计算
-            Timer timer(getType<T>() + " pushBack");
-            for (auto &v : seq.pushSeq_) {
-                t.pushBack(v);
+            Timer timer(getType<T>() + " pushWithoutLimit");
+            for (int cur = 0;cur != performanceElementSize;cur++) {
+                t.pushBack(*iter++);
+            }
+        }
+        {
+            Timer timer(getType<T>() + " pushWithLimit");
+            for (;iter != seq.pushSeq_.end();) {
+                t.pushBack(*iter++);
             }
         }
     }
